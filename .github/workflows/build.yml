@@ -1,0 +1,108 @@
+name: Desktop CI
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  desktop:
+    name: Build ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2022]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.x'
+          cache: true
+      - name: Install Linux desktop toolchain
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgl1-mesa-dev xorg-dev pkg-config libxcursor-dev libxrandr-dev libxinerama-dev libxi-dev libwayland-dev libxkbcommon-dev wayland-protocols
+      - name: Set up Windows native toolchain
+        if: runner.os == 'Windows'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          path-type: inherit
+          update: true
+          install: mingw-w64-x86_64-gcc
+      - name: Resolve dependencies
+        run: go mod tidy
+      - name: Unit and WebRTC integration tests
+        run: go test -timeout 180s ./internal/client ./internal/settings ./internal/rtc
+      - name: Go vet (Linux)
+        if: runner.os == 'Linux'
+        run: go vet ./...
+      - name: Go vet (Windows)
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: go vet ./...
+      - name: Build Linux executable
+        if: runner.os == 'Linux'
+        run: |
+          mkdir -p dist
+          CGO_ENABLED=1 go build -trimpath -ldflags='-s -w' -o dist/badsharing-client-linux-amd64 ./cmd/badsharing-client
+          mkdir -p package/DEBIAN package/usr/bin package/usr/share/applications
+          cp dist/badsharing-client-linux-amd64 package/usr/bin/badsharing-client
+          chmod 755 package/usr/bin/badsharing-client
+          cp packaging/badsharing-client.desktop package/usr/share/applications/
+          VERSION="0.2.0"
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then VERSION="${GITHUB_REF_NAME#v}"; fi
+          cat > package/DEBIAN/control <<EOF
+          Package: badsharing-client
+          Version: ${VERSION}
+          Section: net
+          Priority: optional
+          Architecture: amd64
+          Maintainer: ihatemyfcklife <noreply@users.noreply.github.com>
+          Depends: libc6, libgl1, libx11-6, libxcursor1, libxrandr2, libxinerama1, libxi6, libwayland-client0, libxkbcommon0
+          Recommends: pkexec
+          Description: Secure peer-to-peer file sharing desktop client
+           Graphical client for encrypted RLNC file transfers over WebRTC.
+          EOF
+          dpkg-deb --build --root-owner-group package "dist/badsharing-client_${VERSION}_amd64.deb"
+      - name: Build Windows executable
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: |
+          mkdir -p dist
+          CGO_ENABLED=1 CC=gcc go build -trimpath -ldflags='-s -w -H=windowsgui' -o dist/badsharing-client-windows-amd64.exe ./cmd/badsharing-client
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: badsharing-client-${{ runner.os }}-amd64
+          path: dist/*
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [desktop]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Download desktop binaries
+        uses: actions/download-artifact@v4
+        with:
+          pattern: badsharing-client-*-amd64
+          merge-multiple: true
+          path: dist
+      - name: Publish tagged release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
