@@ -30,7 +30,9 @@ jobs:
           test -f /tmp/client-source/badsharing-client/internal/lanfirewall/lanfirewall_linux.go
           cp -a /tmp/client-source/badsharing-client/. .
           rm -rf .payload
-          rm -f .github/workflows/one-time-import.yml
+          # Workflows must be added/removed by the connected GitHub app,
+          # not by the GitHub Actions token.
+          rm -f .github/workflows/build.yml
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
