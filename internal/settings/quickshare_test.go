@@ -3,6 +3,9 @@ package settings
 import (
 	"context"
 	"encoding/hex"
+	"net/url"
+	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -71,8 +74,9 @@ func TestLocalSignalingInvitation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if config.SignalURL != server.URL || config.CertPin != server.Invite.Pin {
-		t.Fatal("wrong resolved endpoint")
+	resolved, err := url.Parse(config.SignalURL)
+	if err != nil || resolved.Scheme != "https" || resolved.Port() != strconv.Itoa(invite.Port) || !slices.Contains(invite.Hosts, resolved.Hostname()) || config.CertPin != invite.Pin {
+		t.Fatalf("wrong resolved endpoint: %q (candidates: %v)", config.SignalURL, invite.Hosts)
 	}
 	if _, err := config.Validate(); err != nil {
 		t.Fatal(err)
