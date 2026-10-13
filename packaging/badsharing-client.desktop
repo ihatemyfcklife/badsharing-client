@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=badsharing-client
+Comment=Encrypted P2P file sharing
+Exec=badsharing-client
+Icon=folder-download
+Terminal=false
+Categories=Network;FileTransfer;
+StartupNotify=true
