@@ -1,0 +1,17 @@
+# Build artifacts
+/build/
+/dist/
+*.exe
+*.app/
+*.part
+*.log
+coverage.out
+*.test
+
+# Local config, secrets and IDE
+.env
+.env.*
+!.env.example
+.idea/
+.vscode/
+.DS_Store
