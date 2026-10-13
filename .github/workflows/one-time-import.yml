@@ -1,0 +1,39 @@
+name: One-time import of complete client source
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/one-time-import.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  import:
+    if: github.repository == 'ihatemyfcklife/badsharing-client'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify archive and expand all source files
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .payload/00{0..7} | base64 -d > /tmp/badsharing-client-source.tar.xz
+          echo "12774fdfb8afadcc4ea1926f72d3a3b59aebd50d4470a3b03aee17e76368ee15  /tmp/badsharing-client-source.tar.xz" | sha256sum --check
+          mkdir /tmp/client-source
+          tar -xJf /tmp/badsharing-client-source.tar.xz -C /tmp/client-source
+          test -f /tmp/client-source/badsharing-client/go.mod
+          test -f /tmp/client-source/badsharing-client/.github/workflows/build.yml
+          test -f /tmp/client-source/badsharing-client/internal/lanfirewall/lanfirewall_linux.go
+          cp -a /tmp/client-source/badsharing-client/. .
+          rm -rf .payload
+          rm -f .github/workflows/one-time-import.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --stat
+          git commit -m "feat: import complete Linux and Windows desktop client with automatic LAN fixes"
+          git push origin HEAD:main
